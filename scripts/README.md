@@ -9,15 +9,17 @@ and the tech tree data from the civTechTrees.json file from aoe2de.
 Create and activate a virtual environment with genieutils-py installed:
 
 ```sh
-python3 -m venv venv
-source venv/bin/activate
-pip install genieutils-py
+python -m venv .env && source .env/bin/activate && pip install genieutils-py
+```
+
+```sh
+python -m venv .env && source .env/bin/activate.fish && pip install genieutils-py
 ```
 
 Example invocation:
 
 ```sh
-source venv/bin/activate
-./generateDataFiles.py ~/aoe/Aoe2DE\ proton/
-./generateTechTreeJsons.py ~/aoe/Aoe2DE\ proton/
+python generateBuildingTechUnitImages.py ~/.steam/steam/steamapps/common/AoE2DE
+python generateDataFiles.py ~/.steam/steam/steamapps/common/AoE2DE
+python generateTechTreeJsons.py ~/.steam/steam/steamapps/common/AoE2DE
 ```
