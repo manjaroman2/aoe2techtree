@@ -163,6 +163,7 @@ def main():
         if target_filename == 'INDIANS.json':
             target_filename = 'HINDUSTANIS.json'
         target_file = Path(__file__).parent.with_name('data') / 'trees' / target_filename
+        target_file.parent.mkdir(exist_ok=True, parents=True)
         target_file.write_text(
             json.dumps({'buildings': buildings_dicts, 'units_techs': units_techs_dicts}, indent=2, sort_keys=True))
 

@@ -490,6 +490,7 @@ def gather_civs(techtrees, civs_info):
 
 def write_datafile(data, techtrees, outputdir):
     datafile = outputdir / 'data.json'
+    outputdir.mkdir(exist_ok=True)
     with datafile.open('w') as f:
         print(f'Writing data file {datafile}')
         json.dump({"tech_tree_strings": TECH_TREE_STRINGS, "age_names": AGE_NAMES,

@@ -9,11 +9,11 @@ and the tech tree data from the civTechTrees.json file from aoe2de.
 Create and activate a virtual environment with genieutils-py installed:
 
 ```sh
-python -m venv .env && source .env/bin/activate && pip install genieutils-py
+python -m venv .env && source .env/bin/activate && pip install genieutils-py Pillow
 ```
 
 ```sh
-python -m venv .env && source .env/bin/activate.fish && pip install genieutils-py
+python -m venv .env && source .env/bin/activate.fish && pip install genieutils-py Pillow
 ```
 
 Example invocation:
