@@ -703,14 +703,21 @@ function hasItemsInGrid(building) {
 function civ(civName) {
 
     loadJson('data/trees/' + civName.toUpperCase() + '.json', function (treeData) {
+        const techtreeEl = document.getElementById('techtree');
         const root = document.getElementById('root');
         if (root) {
-            document.getElementById('techtree').removeChild(root);
+            techtreeEl.removeChild(root);
         }
+        techtreeEl.classList.remove('dark-mode');
 
         const tree_height = Math.max(window.innerHeight - 80, 100);
         const row_height = tree_height / 4;
         const element_height = row_height / 3;
+
+        if (isReducedView()) {
+            drawReducedView(treeData, tree_height, row_height, element_height, civName);
+            return;
+        }
 
         const connections = [];
         const index = {}
@@ -1009,6 +1016,348 @@ function getInitialLocale() {
     return storedLocale;
 }
 
+function isReducedView() {
+    return document.getElementById('reducedview').checked;
+}
+
+function getReducedViewLayout() {
+    return document.getElementById('reducedview-layout').value;
+}
+
+function toggleReducedView() {
+    try {
+        localStorage.setItem('reducedView', isReducedView().toString());
+    } catch (e) { /* pass */ }
+    loadCiv();
+}
+
+function toggleReducedViewLayout() {
+    try {
+        localStorage.setItem('reducedViewLayout', getReducedViewLayout());
+    } catch (e) { /* pass */ }
+    if (isReducedView()) {
+        loadCiv();
+    }
+}
+
+function setReducedViewState() {
+    try {
+        let reducedView = localStorage.getItem('reducedView');
+        if (reducedView === 'true') {
+            document.getElementById('reducedview').checked = true;
+        }
+        let layout = localStorage.getItem('reducedViewLayout');
+        if (layout) {
+            document.getElementById('reducedview-layout').value = layout;
+        }
+    } catch (e) { /* pass */ }
+}
+
+function getReducedViewData(treeData) {
+    const EXCLUDED_UNIT_IDS = [13, 17, 83, 128, 545]; // Fishing Ship, Trade Cog, Villager, Trade Cart, Transport Ship
+
+    // Build a grid-position index for ordering: unit id -> column index in its building grid
+    const gridOrder = {};
+    for (const building of treeData.buildings) {
+        for (let row = 0; row < building.grid.length; row++) {
+            for (let col = 0; col < building.grid[row].length; col++) {
+                const itemId = building.grid[row][col];
+                if (itemId) {
+                    gridOrder[itemId] = col;
+                }
+            }
+        }
+    }
+
+    let availableUnits = treeData.units_techs.filter(item =>
+        item.use_type === 'Unit'
+        && item.node_status !== 'NotAvailable'
+        && !EXCLUDED_UNIT_IDS.includes(item.node_id)
+    );
+
+    // Remove non-max upgrades: if a unit is upgraded-from by another unit in the same age, hide it
+    const upgradedFrom = new Set();
+    for (const unit of availableUnits) {
+        if (unit.link_id !== -1) {
+            const parent = availableUnits.find(u => u.node_id === unit.link_id && u.age_id === unit.age_id);
+            if (parent) {
+                upgradedFrom.add(parent.node_id);
+            }
+        }
+    }
+    availableUnits = availableUnits.filter(u => !upgradedFrom.has(u.node_id));
+
+    // Preserve building order from the normal view
+    const buildingOrder = {};
+    treeData.buildings.forEach((b, i) => { buildingOrder[b.node_id] = i; });
+
+    // Build building name and picture lookup from treeData.buildings
+    const buildingNames = {};
+    const buildingPictures = {};
+    for (const b of treeData.buildings) {
+        buildingNames[b.node_id] = data.strings[b.name_string_id] || b.name;
+        buildingPictures[b.node_id] = b.picture_index;
+    }
+
+    // Group by age, then by building_id within each age
+    const ageGroups = {1: {}, 2: {}, 3: {}, 4: {}};
+    for (const unit of availableUnits) {
+        const bId = unit.building_id;
+        if (!ageGroups[unit.age_id][bId]) {
+            ageGroups[unit.age_id][bId] = [];
+        }
+        ageGroups[unit.age_id][bId].push(unit);
+    }
+
+    // Sort units within each group by grid column
+    for (let ageId = 1; ageId <= 4; ageId++) {
+        for (const bId of Object.keys(ageGroups[ageId])) {
+            ageGroups[ageId][bId].sort((a, b) => (gridOrder[a.id] || 0) - (gridOrder[b.id] || 0));
+        }
+    }
+
+    // Collect all building IDs that have units across any age, sorted by building order
+    const allBuildingIds = [...new Set(availableUnits.map(u => u.building_id))]
+        .sort((a, b) => (buildingOrder[a] || 0) - (buildingOrder[b] || 0));
+
+    return {availableUnits, ageGroups, buildingOrder, buildingNames, buildingPictures, gridOrder, allBuildingIds};
+}
+
+function drawReducedView(treeData, _tree_height, _row_height, element_height, civName) {
+    const rd = getReducedViewData(treeData);
+
+    if (getReducedViewLayout() === 'building') {
+        drawReducedViewByBuilding(treeData, element_height, civName, rd);
+    } else {
+        drawReducedViewByAge(treeData, element_height, civName, rd);
+    }
+
+    document.getElementById('buildingindex__table').innerHTML = '';
+    parentConnections = new Map();
+}
+
+function drawReducedViewByAge(_treeData, element_height, civName, rd) {
+    const unitPad = 4;
+    const groupPad = 8;
+    const groupGap = 12;
+    const rowGap = 6;
+    const agePad = 10;
+    const startX = 150;
+    const maxWidth = Math.max(window.innerWidth - 340 - startX, 400);
+
+    const ageLayouts = [];
+    for (let ageId = 1; ageId <= 4; ageId++) {
+        const buildingGroups = rd.ageGroups[ageId];
+        const buildingIds = Object.keys(buildingGroups)
+            .sort((a, b) => (rd.buildingOrder[a] || 0) - (rd.buildingOrder[b] || 0));
+        const groupLayouts = [];
+        let cursorX = 0;
+        let cursorY = agePad;
+        let rowHeight = 0;
+
+        for (const bId of buildingIds) {
+            const units = buildingGroups[bId];
+            const groupWidth = units.length * (element_height + unitPad) - unitPad + groupPad * 2;
+            const groupHeight = element_height + groupPad * 2;
+
+            if (cursorX > 0 && cursorX + groupWidth > maxWidth) {
+                cursorY += rowHeight + rowGap;
+                cursorX = 0;
+                rowHeight = 0;
+            }
+
+            groupLayouts.push({
+                buildingId: bId, units, x: cursorX, y: cursorY,
+                width: groupWidth, height: groupHeight,
+            });
+
+            cursorX += groupWidth + groupGap;
+            rowHeight = Math.max(rowHeight, groupHeight);
+        }
+
+        const sectionHeight = Math.max(cursorY + rowHeight + agePad, element_height + agePad * 2);
+        ageLayouts.push({ageId, groupLayouts, sectionHeight});
+    }
+
+    const totalHeight = ageLayouts.reduce((sum, a) => sum + a.sectionHeight, 0);
+    const tree_width = startX + maxWidth + 20;
+
+    const draw = SVG().addTo('#techtree').id('root').size(tree_width, totalHeight)
+        .click((e) => { if (e.target.id === 'root') hideHelp(); });
+
+    document.getElementById('techtree').onclick = (e) => {
+        if (e.target.id === 'techtree') hideHelp();
+    };
+
+    let ageY = 0;
+    const icon_height = 56, icon_width = 56, margin_left = 20;
+    const image_urls = AGE_IMAGES[data.civs[civName].era];
+    const age_names = getAgeNames(data.civs[civName].era);
+
+    for (let i = 0; i < ageLayouts.length; i++) {
+        const layout = ageLayouts[i];
+        const sectionH = layout.sectionHeight;
+
+        if (i % 2 === 0) {
+            draw.rect(tree_width, sectionH).attr({fill: '#4d3617', opacity: 0.3}).move(0, ageY).click(hideHelp);
+        }
+
+        let age_image_group = draw.group().click(hideHelp);
+        let iconY = ageY + (sectionH - icon_height - 20) / 2;
+        age_image_group.image('img/techtree/' + image_urls[i])
+            .size(icon_width, icon_height).move(margin_left, iconY);
+        age_image_group.text(age_names[i])
+            .font({size: 12, weight: 'bold'})
+            .cx(icon_width / 2 + margin_left).y(iconY + icon_height + 2);
+
+        for (const group of layout.groupLayouts) {
+            const gx = startX + group.x;
+            const gy = ageY + group.y;
+
+            draw.rect(group.width, group.height)
+                .attr({fill: 'none', stroke: '#8b7355', 'stroke-width': 1, rx: 3, ry: 3, opacity: 0.6})
+                .move(gx, gy).click(hideHelp);
+
+            for (let u = 0; u < group.units.length; u++) {
+                const unit = group.units[u];
+                unit.x = gx + groupPad + u * (element_height + unitPad);
+                unit.y = gy + groupPad;
+                drawItem(unit, element_height, totalHeight, draw);
+            }
+        }
+
+        ageY += sectionH;
+    }
+}
+
+function drawReducedViewByBuilding(_treeData, element_height, civName, rd) {
+    const unitPad = 4;
+    const cellPad = 8;
+    const buildingColWidth = element_height + 16; // building icon column
+    const startX = buildingColWidth;
+    const startY = 60;  // space for age column headers
+
+    const image_urls = AGE_IMAGES[data.civs[civName].era];
+    const age_names = getAgeNames(data.civs[civName].era);
+
+    // Ages to show as columns (skip Dark Age = 1 if no units there across any building)
+    const ageCols = [2, 3, 4]; // Feudal, Castle, Imperial
+
+    // Calculate column widths: widest cell in each age column
+    const colWidths = {};
+    for (const ageId of ageCols) {
+        let maxCellWidth = element_height + cellPad * 2; // minimum width
+        for (const bId of rd.allBuildingIds) {
+            const units = (rd.ageGroups[ageId] && rd.ageGroups[ageId][bId]) || [];
+            if (units.length > 0) {
+                const cellWidth = units.length * (element_height + unitPad) - unitPad + cellPad * 2;
+                maxCellWidth = Math.max(maxCellWidth, cellWidth);
+            }
+        }
+        colWidths[ageId] = maxCellWidth;
+    }
+
+    // Calculate row heights (uniform: one unit tall + padding)
+    const rowHeight = element_height + cellPad * 2;
+    const rowGap = 6;
+    const colGap = 10;
+
+    // Column x positions
+    const colX = {};
+    let cx = startX;
+    for (const ageId of ageCols) {
+        colX[ageId] = cx;
+        cx += colWidths[ageId] + colGap;
+    }
+    const tree_width = cx + 10;
+
+    // Row y positions
+    const buildingRows = rd.allBuildingIds;
+    const rowY = {};
+    let ry = startY;
+    for (const bId of buildingRows) {
+        rowY[bId] = ry;
+        ry += rowHeight + rowGap;
+    }
+    const totalHeight = ry + 10;
+
+    document.getElementById('techtree').classList.add('dark-mode');
+
+    const draw = SVG().addTo('#techtree').id('root').size(tree_width, totalHeight)
+        .click((e) => { if (e.target.id === 'root') hideHelp(); });
+
+    document.getElementById('techtree').onclick = (e) => {
+        if (e.target.id === 'techtree') hideHelp();
+    };
+
+    // Dark background
+    draw.rect(tree_width, totalHeight).attr({fill: '#1e1e1e'}).click(hideHelp);
+
+    // Alternating row backgrounds
+    for (let i = 0; i < buildingRows.length; i++) {
+        if (i % 2 === 0) {
+            draw.rect(tree_width, rowHeight)
+                .attr({fill: '#ffffff', opacity: 0.05})
+                .move(0, rowY[buildingRows[i]])
+                .click(hideHelp);
+        }
+    }
+
+    // Alternating column backgrounds
+    for (let i = 0; i < ageCols.length; i++) {
+        if (i % 2 === 0) {
+            draw.rect(colWidths[ageCols[i]], totalHeight - startY)
+                .attr({fill: '#ffffff', opacity: 0.03})
+                .move(colX[ageCols[i]], startY)
+                .click(hideHelp);
+        }
+    }
+
+    // Draw age column headers
+    const icon_size = 40;
+    for (const ageId of ageCols) {
+        const ageIdx = ageId - 1;
+        const colCenter = colX[ageId] + colWidths[ageId] / 2;
+        let header_group = draw.group().click(hideHelp);
+        header_group.image('img/techtree/' + image_urls[ageIdx])
+            .size(icon_size, icon_size)
+            .cx(colCenter).y(4);
+        header_group.text(age_names[ageIdx])
+            .font({size: 10, weight: 'bold', fill: '#ccc'})
+            .cx(colCenter).y(icon_size + 4);
+    }
+
+    // Draw building icons as row labels
+    const bldgIconSize = Math.min(element_height, rowHeight - 4);
+    for (const bId of buildingRows) {
+        const iconX = (buildingColWidth - bldgIconSize) / 2;
+        const iconY = rowY[bId] + (rowHeight - bldgIconSize) / 2;
+        draw.image('img/Building/' + rd.buildingPictures[bId] + '.png')
+            .size(bldgIconSize, bldgIconSize)
+            .move(iconX, iconY)
+            .attr({title: rd.buildingNames[bId]})
+            .click(hideHelp);
+    }
+
+    // Draw unit cells
+    for (const ageId of ageCols) {
+        for (const bId of buildingRows) {
+            const units = (rd.ageGroups[ageId] && rd.ageGroups[ageId][bId]) || [];
+            if (units.length === 0) continue;
+
+            const cx = colX[ageId];
+            const cy = rowY[bId];
+
+            for (let u = 0; u < units.length; u++) {
+                const unit = units[u];
+                unit.x = cx + cellPad + u * (element_height + unitPad);
+                unit.y = cy + cellPad;
+                drawItem(unit, element_height, totalHeight, draw);
+            }
+        }
+    }
+}
+
 function main() {
 
     history.pushState = (f => function pushState() {
@@ -1038,6 +1387,7 @@ function main() {
     })
 
     setAdvancedStatsState();
+    setReducedViewState();
 
     let storedLocale = getInitialLocale();
     fillLocaleSelector(storedLocale);

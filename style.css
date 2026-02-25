@@ -2,6 +2,15 @@
     box-sizing: border-box;
 }
 
+svg image {
+    image-rendering: high-quality;
+}
+
+#techtree.dark-mode {
+    background: #1e1e1e;
+    border-left-color: #333;
+}
+
 html,
 body {
     width: 100%;
@@ -160,6 +169,36 @@ a, a:hover, a:visited, a:active {
 
 #civselect:focus {
     outline: none;
+}
+
+#reducedview-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+#reducedview-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9pt;
+    cursor: pointer;
+    white-space: nowrap;
+    color: #4d3617;
+}
+
+#reducedview-toggle input[type="checkbox"] {
+    cursor: pointer;
+}
+
+#reducedview-layout {
+    font-size: 8pt;
+    background-color: #72604a;
+    color: white;
+    border: none;
+    padding: 1px 4px;
+    cursor: pointer;
 }
 
 #civinfo {
