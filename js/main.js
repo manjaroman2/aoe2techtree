@@ -109,7 +109,7 @@ function loadCiv() {
     civ(selectedCiv, tree);
     if (selectedCiv in data.civs) {
         document.getElementById('civtext').innerHTML = data.strings[data.civs[selectedCiv].help_string_id];
-        document.getElementById('civlogo').src = `./img/Civs/${selectedCiv.toLowerCase()}.png`;
+        document.getElementById('civlogo').src = `./img/civs/${selectedCiv.toLowerCase()}.png`;
         window.location.hash = selectedCiv;
     } else {
         document.getElementById('civtext').innerHTML = '';
@@ -435,7 +435,7 @@ function createXRefBadges() {
 
         let xRefImage = document.createElement('img');
 
-        xRefImage.src = `./img/Civs/${civ.toLowerCase()}.png`;
+        xRefImage.src = `./img/civs/${civ.toLowerCase()}.png`;
         xRefImage.title = data.strings[data.civs[civ].name_string_id];
         xRefImage.id = `xRef__badge__${civ}`;
         xRefImage.classList.add('xRef__badge')
@@ -861,7 +861,7 @@ function civ(civName) {
         let age_names = getAgeNames(data.civs[civName].era);
         for (let i = 0; i < image_urls.length; i++) {
             let age_image_group = draw.group().click(hideHelp);
-            let age_image = age_image_group.image('img/Ages/' + image_urls[i])
+            let age_image = age_image_group.image('img/techtree/' + image_urls[i])
                 .size(icon_width, icon_height)
                 .x(margin_left)
                 .y(row_height * i + vertical_spacing);
@@ -935,7 +935,7 @@ function drawItem(itemToDraw, element_height, tree_height, draw) {
             opacity: 0.2,
             id: `${itemToDraw.id}_disabled_gray`
         }).move(itemToDraw.x, itemToDraw.y);
-        const cross = item.image(prefix + 'cross.png')
+        const cross = item.image(prefix + '/techtree/normal/notavailable_cross_overlay_normal.png')
             .size(element_height * 0.7, element_height * 0.7)
             .attr({id: itemToDraw.id + '_x'})
             .addClass('cross')

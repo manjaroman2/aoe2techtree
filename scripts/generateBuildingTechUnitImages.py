@@ -201,6 +201,8 @@ def main():
     civs_dst = Path(__file__).parent.resolve().parent / 'img' / 'civs'
     print(f'Copying {civs_src} → {civs_dst}')
     shutil.copytree(civs_src, civs_dst, dirs_exist_ok=True)
+    if (tmp_file := (civs_dst / "indians.png")).exists():
+        shutil.copy2(tmp_file, civs_dst / "hindustanis.png")
 
     techtree_src = base_path.parent / 'menu' / "techtree"
     techtree_dst = Path(__file__).parent.resolve().parent / 'img' / 'techtree'

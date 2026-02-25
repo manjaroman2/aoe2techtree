@@ -17,12 +17,13 @@ body, input, select, tspan {
 body {
     margin: 0;
     display: flex;
-    background: url('img/Backgrounds/bg_aoe2_hd_paper.jpg') repeat;
+    /* background: url('img/backgrounds/techtree_panel.png') repeat; */
+    background: #fff;
     font-size: 10pt;
 }
 
 #techtree {
-    background: url('img/Backgrounds/bg_aoe2_hd_paper.jpg') repeat local;
+    background: url('img/backgrounds/techtree_middle.png') repeat local;
 }
 
 a, a:hover, a:visited, a:active {

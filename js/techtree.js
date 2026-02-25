@@ -13,8 +13,8 @@ const PREFIX = Object.freeze({
 });
 
 const AGE_IMAGES = {
-    'base': ['base_dark_age.png', 'base_feudal_age.png', 'base_castle_age.png', 'base_imperial_age.png'],
-    'antiquity': ['ant_archaic_age.png', 'ant_civic_age.png', 'ant_classical_age.png', 'ant_imperial_age.png'],
+    'base': ['techtree_dark age.png', 'techtree_feudal age.png', 'techtree_castle age.png', 'techtree_imperial age.png'],
+    'antiquity': ['techtree_archaic_age.png', 'techtree_civic_age.png', 'techtree_classical_age.png', 'techtree_ant_imperial_age.png'],
 }
 
 const getAgeNames = (era)=>{
