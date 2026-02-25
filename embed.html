@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <title>Tech Tree</title>
+    <link rel="stylesheet" href="fonts/merriweather.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background: #1e1e1e; margin: 0; }
+        #metainfo { display: none !important; }
+        #wrapper { display: block; }
+        #container { display: block; }
+        #techtree { width: 100%; height: 100vh; border-left: none; overflow: hidden; }
+        #techtree svg { transform-origin: top left; }
+    </style>
+    <script>
+        // Force "by building" reduced view before main.js runs
+        function setReducedViewState() {
+            document.getElementById('reducedview').checked = true;
+            document.getElementById('reducedview-layout').value = 'building';
+        }
+
+        // Scale SVG to fit viewport once rendered
+        function fitSvg() {
+            const container = document.getElementById('techtree');
+            const svg = container.querySelector('svg');
+            if (!svg) return;
+            const svgW = parseFloat(svg.getAttribute('width'));
+            const svgH = parseFloat(svg.getAttribute('height'));
+            if (!svgW || !svgH) return;
+            const scale = Math.min(container.clientWidth / svgW, container.clientHeight / svgH);
+            svg.style.transform = 'scale(' + scale + ')';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('techtree');
+            new MutationObserver(() => fitSvg()).observe(container, { childList: true, subtree: true });
+            window.addEventListener('resize', fitSvg);
+        });
+    </script>
+    <script defer src="js/svg.min.js"></script>
+    <script defer src="js/techtree.js"></script>
+    <script defer src="js/main.js"></script>
+</head>
+<body>
+<div id="container">
+    <div id="wrapper">
+        <div id="metainfo">
+            <div id="civinfo">
+                <div id="civtitle">
+                    <select id="civselect"></select>
+                    <span id="reducedview-controls">
+                        <label id="reducedview-toggle">
+                            <input type="checkbox" id="reducedview" checked>
+                            <span>Units</span>
+                        </label>
+                        <select id="reducedview-layout">
+                            <option value="building" selected>By Building</option>
+                        </select>
+                    </span>
+                    <img id="civlogo" height="1" width="1"
+                         data-transparent="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+                         src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" alt="">
+                </div>
+                <p id="civtext"></p>
+            </div>
+            <div class="buildingindex"><table id="buildingindex__table"></table></div>
+            <div class="key"><table id="key__table"></table></div>
+            <div class="locale-switcher"><select id="localeselect"></select></div>
+        </div>
+        <div id="techtree">
+            <div id="helptext">
+                <div id="helptext__content"></div>
+                <details id="advanced-stats">
+                    <summary>Advanced Stats</summary>
+                    <div id="helptext__advanced_stats"></div>
+                    <div id="helptext__x_ref">
+                        <h3>Civilizations</h3>
+                        <div id="helptext__x_ref__container"></div>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
