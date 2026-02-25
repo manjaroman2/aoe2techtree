@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
+import argparse
 import json
-import re
 import shutil
 import subprocess
 from itertools import chain
@@ -12,7 +12,6 @@ from PIL.Image import Resampling
 PLAYER_COLOUR = (0, 119, 228)
 # PLAYER_COLOUR = (236,9,9)
 
-BASE_PATH = Path.home() / 'aoe/Aoe2DE proton/widgetui/textures/ingame'
 TARGET_SIZE = (48, 48)
 
 COLOURS = {
@@ -109,25 +108,46 @@ COLOURS = {
 }
 
 
+def fmt_size(b: float) -> str:
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if b < 1024:
+            return f'{b:.1f} {unit}'
+        b /= 1024
+    return f'{b:.1f} TB'
+
+
 def scale(v):
     return (int(PLAYER_COLOUR[0] * (v[0] / 255)), int(PLAYER_COLOUR[1] * (v[1] / 255)),
             int(PLAYER_COLOUR[2] * (v[2] / 255)), 255)
 
 
 def main():
-    techtreesdir = Path.home() / 'aoe' / 'Aoe2DE proton' / 'resources' / '_common' / 'dat' / 'CivTechTrees'
+    parser = argparse.ArgumentParser(description='Generate building/tech/unit images from AoE2DE assets.')
+    parser.add_argument('aoe2de_path', type=Path, help='Path to AoE2DE installation (e.g. ~/.steam/steam/steamapps/common/AoE2DE)')
+    parser.add_argument('--resize', action='store_true', help=f'Resize images to {TARGET_SIZE[0]}x{TARGET_SIZE[1]}')
+    args = parser.parse_args()
+
+    aoe2de_path = args.aoe2de_path.expanduser().resolve()
+    base_path = aoe2de_path / 'widgetui' / 'textures' / 'ingame'
+    techtreesdir = aoe2de_path / 'resources' / '_common' / 'dat' / 'CivTechTrees'
+
     ids = {'Unit': set(), 'Building': set(), 'Tech': set()}
     print(techtreesdir)
     for json_file in sorted(techtreesdir.glob('*.json')):
         data = json.loads(json_file.read_text())
         for item in chain(data['civ_techs_buildings'], data['civ_techs_units']):
             ids[item['Use Type']].add(item['Picture Index'])
+
+    tmp_dir = Path('/tmp/gbtui-uwu')
+    tmp_dir.mkdir(exist_ok=True)
+    tmp_to_target = {}
+    total_bytes = 0
+
     for type_, ids_for_type in sorted(ids.items()):
         for picture_index in sorted(ids_for_type):
-            print(type_, picture_index)
             sourcetype = 'tech' if type_ == 'Tech' else 'buildings' if type_ == 'Building' else 'units'
-            source_dds_list = (list((BASE_PATH / sourcetype).glob(f'{picture_index:03}_*.dds')) +
-                          list((BASE_PATH / sourcetype).glob(f'{picture_index:03}_*.DDS')))
+            source_dds_list = (list((base_path / sourcetype).glob(f'{picture_index:03}_*.dds')) +
+                          list((base_path / sourcetype).glob(f'{picture_index:03}_*.DDS')))
             if len(source_dds_list) > 1:
                 print(source_dds_list)
                 raise AssertionError(f'list too long for {type_=}, {picture_index=}')
@@ -136,10 +156,59 @@ def main():
                 raise AssertionError(f'list too short for {type_=}, {picture_index=}')
             source_dds = source_dds_list[0]
             target_file = Path(__file__).parent.resolve().parent / 'img' / type_ / f'{picture_index}.png'
-            convert(source_dds, target_file)
+            tmp_file = tmp_dir / f'{type_}_{picture_index}.png'
+            w, h = process_dds(source_dds, tmp_file, args.resize)
+            file_bytes = tmp_file.stat().st_size
+            total_bytes += file_bytes
+            print(f'  {type_} {picture_index}: {w}x{h}, {fmt_size(file_bytes)}  (total: {fmt_size(total_bytes)})')
+            tmp_to_target[tmp_file] = target_file
+
+    backgrounds_src = aoe2de_path / 'widgetui' / 'textures' / 'backgrounds'
+    backgrounds_dst = Path(__file__).parent.resolve().parent / 'img' / 'backgrounds'
+    print(f'Processing backgrounds from {backgrounds_src}')
+    for source_dds in sorted(chain(backgrounds_src.glob('*.dds'), backgrounds_src.glob('*.DDS'))):
+        tmp_file = tmp_dir / f'backgrounds_{source_dds.stem}.png'
+        w, h = process_dds(source_dds, tmp_file, args.resize)
+        file_bytes = tmp_file.stat().st_size
+        total_bytes += file_bytes
+        print(f'  backgrounds {source_dds.name}: {w}x{h}, {fmt_size(file_bytes)}  (total: {fmt_size(total_bytes)})')
+        tmp_to_target[tmp_file] = backgrounds_dst / f'{source_dds.stem}.png'
+
+    print(f'Running pngquant on {len(tmp_to_target)} files...')
+    subprocess.run(['pngquant', '--ext', '.png', '--force', *map(str, tmp_to_target)], check=True)
+
+    for tmp_file, target_file in tmp_to_target.items():
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tmp_file, target_file)
+        tmp_file.unlink()
+
+    backgrounds_dst.mkdir(parents=True, exist_ok=True)
+    for png_file in sorted(chain(backgrounds_src.glob('*.png'), backgrounds_src.glob('*.PNG'))):
+        print(f'Copying {png_file.name} → {backgrounds_dst}')
+        shutil.copy2(png_file, backgrounds_dst / png_file.name)
+
+    staticons_src = base_path / 'staticons'
+    staticons_dst = Path(__file__).parent.resolve().parent / 'img' / 'staticons'
+    print(f'Copying {staticons_src} → {staticons_dst}')
+    shutil.copytree(staticons_src, staticons_dst, dirs_exist_ok=True)
+
+    emblems_src = base_path / 'emblems'
+    emblems_dst = Path(__file__).parent.resolve().parent / 'img' / 'emblems'
+    print(f'Copying {emblems_src} → {emblems_dst}')
+    shutil.copytree(emblems_src, emblems_dst, dirs_exist_ok=True)
+
+    civs_src = base_path.parent / 'menu' / "civs"
+    civs_dst = Path(__file__).parent.resolve().parent / 'img' / 'civs'
+    print(f'Copying {civs_src} → {civs_dst}')
+    shutil.copytree(civs_src, civs_dst, dirs_exist_ok=True)
+
+    techtree_src = base_path.parent / 'menu' / "techtree"
+    techtree_dst = Path(__file__).parent.resolve().parent / 'img' / 'techtree'
+    print(f'Copying {techtree_src} → {techtree_dst}')
+    shutil.copytree(techtree_src, techtree_dst, dirs_exist_ok=True)
 
 
-def convert(source_dds: Path, target_file: Path):
+def process_dds(source_dds: Path, target_file: Path, resize: bool) -> tuple[int, int]:
     assert source_dds.is_file()
     print(f'Converting {source_dds} → {target_file}')
     with Image.open(source_dds) as im:
@@ -153,17 +222,15 @@ def convert(source_dds: Path, target_file: Path):
         w, h = im.size
         for x in range(w):
             for y in range(h):
-                alphavalue = a.getpixel((x, y))
                 grayscalevalue = rgb.getpixel((x, y))
                 overlay.putpixel((x, y), scale(grayscalevalue))
 
         composite = Image.composite(rgb, overlay, a)
-        resized = composite.resize(TARGET_SIZE, resample=Resampling.BICUBIC)
-        resized.save('/tmp/gbtui-uwu.png')
-    result_file = Path('/tmp/gbtui-uwu-fs8.png')
-    result_file.unlink(missing_ok=True)
-    subprocess.run(['pngquant', '/tmp/gbtui-uwu.png'])
-    shutil.move(result_file, target_file)
+        if resize:
+            composite = composite.resize(TARGET_SIZE, resample=Resampling.BICUBIC)
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        composite.save(target_file)
+        return composite.size
 
 
 if __name__ == '__main__':

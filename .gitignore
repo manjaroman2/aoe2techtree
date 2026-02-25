@@ -2,3 +2,6 @@
 bin
 .directory
 /scripts/venv
+scripts/.env
+data/
+img/
